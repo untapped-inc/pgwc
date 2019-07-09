@@ -31,6 +31,10 @@ int status = WL_IDLE_STATUS;
 long startTime = 0;
 long startingMillis;
 
+long previousORPSampleTime;
+//total milliseconds per ORP sample
+const int ORP_SAMPlE_MILLIS = 300000;
+
 
 void setup() {
   Serial.begin(9600);
@@ -42,7 +46,8 @@ void setup() {
   initSDCard();
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, LOW);
-
+  //track time to make sure we only sample once per 5 minutes
+  previousORPSampleTime = millis();
 }
 
 void loop() {
@@ -50,7 +55,12 @@ void loop() {
   //Serial.println(totalFlowmeter);
   int ORPReading = getORPReading(); //in mv
   appendSensor(totalFlowmeter, true);
-  appendSensor(ORPReading, false);
+  long sampleTime = millis();
+  if (sampleTime - previousORPSampleTime > ORP_SAMPlE_MILLIS){
+    previousORPSampleTime = sampleTime;
+    //grab reading from ORP Sensor
+    appendSensor(ORPReading, false);
+  }
  delay(100);
 
  if(totalFlowmeter > 60000){
@@ -93,14 +103,6 @@ void appendSensor(unsigned long value, bool isSensorA){
     long unixTime = getCurrentTime();
     sprintf(buffer, "{created_at: %lu, value: %lu },", unixTime, value); 
     sensorFile.println(buffer);
-    /*
-    sensorFile.write("{created_at: ");
-    sensorFile.write(itoa(unixTime, );
-    sensorFile.write(", value: " + value);
-    sensorFile.println("},");
-    sensorFile.close();
-    //Serial.println("printing");
-    */
   }else{
     Serial.println("Failed to open for print");
   }
