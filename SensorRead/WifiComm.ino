@@ -4,7 +4,9 @@ void wifiCommunication(const char *body){
    if (client.connect(URL, 80)){
       Serial.println("connected to server");
       Serial.println(body);
-      client.println("GET /todos/1"); ///sema/water-ops/pgwc/");
+      client.print("GET /sema/water-ops/pgwc/");
+      client.print(DEVICE_ID);
+      client.println(" HTTP/1.1"); 
       client.print("Host: ");
       client.println(URL);
       client.println("Content-type:application/json");

@@ -7,7 +7,8 @@
 #define RELAY_PIN 13
 //this is how many units the analog read must differ between readings in order to be considered a rising or falling edge
 #define FLOWMETER_THRESHOLD 100
-#define URL "jsonplaceholder.typicode.com"//"pgw.semawater.org"
+#define URL "pgw.semawater.org"
+#define DEVICE_ID 1
 
 //used for SD Card - Arduino digital pin being used for the SD Card Reader's clock pin
 const char *ORP_FILENAME =  "SensorB.txt";
