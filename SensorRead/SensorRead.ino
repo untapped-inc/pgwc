@@ -1,6 +1,8 @@
+#include <ArduinoJson.h>
 #include <SD.h>
 #include <WiFiNINA.h>
 #include "WiFiCredentials.h"
+
 
 #define FLOWMETER_PIN A0
 #define ORP_PIN A1
@@ -17,9 +19,6 @@ const char *FLOWMETER_FILENAME = "SensorA.txt";
 const int CS_PIN = 4;
 //the number of milliliters that have been detected by the sensor per pulse (rising and falling edge)
 const int ML_PER_PULSE = 500;
-
-//track total ML passed through the flowmeter
-unsigned long totalFlowmeter = 0;
 
 //variable to store the flowmeter readings for future comparison
 float previousFlowmeter = -9999;
@@ -40,6 +39,16 @@ const int WIFI_INTERVAL = 1000;
 //track whether we are off or on
 bool waterIsFlowing = false;
 
+//the current water unit left for the device since the last currentMaxWaterAmount was set. It’s set during first connection 
+//and changes either locally, through local calculations and after a sync/connection, from the remote calculation.
+int currentWaterAmount = -1;
+//the current max water unit set for the device, it’s set during first connection and changes on subsequent connections or synchronizations. 
+//The controller CANNOT start retrieving data from sensors without this value. THIS VALUE DOES NOT CHANGE, IT’S ONLY USED FOR REFERENCE.
+int maxWaterAmount = -1;
+
+//used for JSON Deserilization
+StaticJsonDocument<1024> jsonDoc1;
+StaticJsonDocument<1024> jsonDoc2;
 
 void setup() {
   Serial.begin(9600);
@@ -66,13 +75,16 @@ void setup() {
 void loop() {
   long loopTime = millis();
   
-  //this logic deals with  measurement
-  if (waterIsFlowing){
-    totalFlowmeter += getFlowmeterReading(); //in milliliters
+  //this logic deals with  measurement - check that water is flowing and that appropriate variables have been set first!
+  if (waterIsFlowing && maxWaterAmount != -1 && currentWaterAmount != -1){
+    int flowmeterReading = getFlowmeterReading(); //in milliliters
+    //decrement the water from the current water amount
+    currentWaterAmount -= flowmeterReading;
     //Serial.println(totalFlowmeter);
-    appendSensor(totalFlowmeter, true);
-    
-   if(totalFlowmeter > 60000){
+    //write to SD Card
+    appendSensor(flowmeterReading, true);
+    //turn off the motor when enough water has been delivered
+   if(currentWaterAmount <= 0){
       //turn off relay
       turnWaterOff();
    }
@@ -86,13 +98,9 @@ void loop() {
       Serial.println(flowmeterData);
       wifiCommunication(flowmeterData);
     }
-  }
-
-  //read from the API response
-   while (client.available()) {
-    char c = client.read();
-    Serial.print(c);
-  }
+    //check for the response to the HTTP GET Request - this sets the max water and current water variables
+    checkResponse();
+  }  
 
   //ORP readings every 5 minutes
   if (loopTime - previousORPSampleTime > ORP_SAMPlE_MILLIS){

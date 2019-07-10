@@ -12,9 +12,51 @@ void wifiCommunication(const char *body){
       client.println("Content-type:application/json");
       client.println("Connection: close");
       client.println();
-      //client.println(body);      
    }else{
     Serial.println("Error connecting to server");
    }
+  }
+}
+
+//check for the response to the HTTP GET
+void checkResponse(){
+  //hold the JSON results
+  String deviceString;
+  String maxWaterString;
+  //find the nested objects using this
+  int bracketCount = 0;
+  
+  //read from the API response
+   while (client.available()) {
+    char c = (char)client.read();
+    //wait for the JSON
+    if (c == '{'){
+      bracketCount++;
+    }
+    //start building the response string
+    if (bracketCount == 2){
+      deviceString += c;
+    }else if (bracketCount == 3){
+      maxWaterString +=c;
+    }
+  }
+  //Serial.print("response string: " + responseString);
+  //deserialize
+  DeserializationError error1 = deserializeJson(jsonDoc1, deviceString);
+  DeserializationError error2 = deserializeJson(jsonDoc2, maxWaterString);
+  long currentWaterChar = jsonDoc1["current_water_amount"];
+  long maxWaterChar = jsonDoc2["value"];
+  if (currentWaterChar > 0){
+    //set the water variable
+    currentWaterAmount = currentWaterChar;
+    Serial.print("currrent water char ");
+    Serial.println(currentWaterChar);
+  }
+
+  if(maxWaterChar > 0){
+    //set the max water variable
+    maxWaterAmount = maxWaterChar;
+    Serial.print("max water char ");
+    Serial.println(maxWaterChar);
   }
 }
