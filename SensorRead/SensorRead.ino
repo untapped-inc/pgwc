@@ -1,15 +1,13 @@
 #include <SD.h>
-
 #include <WiFiNINA.h>
+#include "WiFiCredentials.h"
 
-
-#define WifiSSID "PGHS"
-#define WifiPassword "67gv*vwb"
 #define FLOWMETER_PIN A0
 #define ORP_PIN A1
 #define RELAY_PIN 13
 //this is how many units the analog read must differ between readings in order to be considered a rising or falling edge
 #define FLOWMETER_THRESHOLD 100
+#define URL "jsonplaceholder.typicode.com"//"pgw.semawater.org"
 
 //used for SD Card - Arduino digital pin being used for the SD Card Reader's clock pin
 const char *ORP_FILENAME =  "SensorB.txt";
@@ -32,8 +30,14 @@ long startTime = 0;
 long startingMillis;
 
 long previousORPSampleTime;
+long previousWifiTime;
 //total milliseconds per ORP sample
-const int ORP_SAMPlE_MILLIS = 300000;
+const long ORP_SAMPlE_MILLIS = 300000;
+// interval at which to communicate (milliseconds)
+const int WIFI_INTERVAL = 1000;
+
+//track whether we are off or on
+bool waterIsFlowing = false;
 
 
 void setup() {
@@ -42,34 +46,62 @@ void setup() {
   pinMode(ORP_PIN, INPUT);
   Serial.println("Starting");
   status = WiFi.begin(WifiSSID, WifiPassword);
+
+  while (WiFi.status() != WL_CONNECTED) {  //Wait for the WiFI connection completion
+    delay(500);
+    Serial.println("Waiting for connection");
+  }
+  
   initTimekeeping();
   initSDCard();
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  //make sure that the water is off when we start
+  turnWaterOff();
   //track time to make sure we only sample once per 5 minutes
   previousORPSampleTime = millis();
+  previousWifiTime = previousORPSampleTime;
 }
 
 void loop() {
-  totalFlowmeter += getFlowmeterReading(); //in milliliters
-  //Serial.println(totalFlowmeter);
-  int ORPReading = getORPReading(); //in mv
-  appendSensor(totalFlowmeter, true);
-  long sampleTime = millis();
-  if (sampleTime - previousORPSampleTime > ORP_SAMPlE_MILLIS){
-    previousORPSampleTime = sampleTime;
+  long loopTime = millis();
+  
+  //this logic deals with  measurement
+  if (waterIsFlowing){
+    totalFlowmeter += getFlowmeterReading(); //in milliliters
+    //Serial.println(totalFlowmeter);
+    appendSensor(totalFlowmeter, true);
+    
+   if(totalFlowmeter > 60000){
+      //turn off relay
+      turnWaterOff();
+   }
+  }else{
+    //this deals with communication when the water is not flowing
+    //check to make sure that enough time has elapsed before attempting communication
+    if (loopTime - previousWifiTime > WIFI_INTERVAL){
+      previousWifiTime = loopTime;
+      char* flowmeterData = readFile(FLOWMETER_FILENAME);
+      char* orpData = readFile(ORP_FILENAME);
+      Serial.println(flowmeterData);
+      wifiCommunication(flowmeterData);
+    }
+  }
+
+  //read from the API response
+   while (client.available()) {
+    char c = client.read();
+    Serial.print(c);
+  }
+
+  //ORP readings every 5 minutes
+  if (loopTime - previousORPSampleTime > ORP_SAMPlE_MILLIS){
+    int ORPReading = getORPReading(); //in mv
+    previousORPSampleTime = loopTime;
     //grab reading from ORP Sensor
     appendSensor(ORPReading, false);
   }
- delay(100);
 
- if(totalFlowmeter > 60000){
-    //turn off relay
-    digitalWrite(RELAY_PIN, HIGH);
-    readFile(FLOWMETER_FILENAME);
-    readFile(ORP_FILENAME);
-    return;
- }
+  delay(100);
 }
 
 
@@ -81,8 +113,8 @@ char* readFile(const char *filename){
   File sensorFile = SD.open(filename);
   if (sensorFile){
     while(sensorFile.available()){
-     //strcat(fileContents, sensorFile.read);
-      Serial.write(sensorFile.read());
+     fileContents += sensorFile.read();
+      //Serial.write(sensorFile.read());
     }
     sensorFile.close();
   }else{
@@ -178,4 +210,14 @@ int getFlowmeterReading(){
 float getORPReading(){
   //it's just an analog read
   return analogRead(ORP_PIN);
+}
+
+void turnWaterOff(){
+  digitalWrite(RELAY_PIN, HIGH);
+  waterIsFlowing = false;
+}
+
+void turnWaterOn(){
+  digitalWrite(RELAY_PIN, LOW);
+  waterIsFlowing = true;
 }
