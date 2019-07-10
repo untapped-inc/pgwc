@@ -32,12 +32,16 @@ long startingMillis;
 long previousORPSampleTime;
 long previousWifiTime;
 //total milliseconds per ORP sample
-const long ORP_SAMPlE_MILLIS = 300000;
+//todo: change back to 5 minutes
+const long ORP_SAMPlE_MILLIS = 3000;//300000;
 // interval at which to communicate (milliseconds)
 const int WIFI_INTERVAL = 1000;
 
 //track whether we are off or on
 bool waterIsFlowing = false;
+
+//set to true when it's time to send new sensor data up
+bool newDataExists = false;
 
 //the current water unit left for the device since the last currentMaxWaterAmount was set. It’s set during first connection 
 //and changes either locally, through local calculations and after a sync/connection, from the remote calculation.
@@ -83,6 +87,7 @@ void loop() {
     //Serial.println(totalFlowmeter);
     //write to SD Card
     appendSensor(flowmeterReading, true);
+    newDataExists = true;
     //turn off the motor when enough water has been delivered
    if(currentWaterAmount <= 0){
       //turn off relay
@@ -93,13 +98,50 @@ void loop() {
     //check to make sure that enough time has elapsed before attempting communication
     if (loopTime - previousWifiTime > WIFI_INTERVAL){
       previousWifiTime = loopTime;
-      char* flowmeterData = readFile(FLOWMETER_FILENAME);
-      char* orpData = readFile(ORP_FILENAME);
-      Serial.println(flowmeterData);
-      wifiCommunication(flowmeterData);
+      //if there is new data, send it, otherwise check the API
+      if (!newDataExists){
+        //sends the GET HTTP request
+        getData();
+      }else{
+        //send the data
+        //String flowmeterData = readFile(FLOWMETER_FILENAME);
+        String orpData = readFile(ORP_FILENAME);
+        /*Serial.print("flowmeter Data: ");
+        Serial.println(flowmeterData);
+        */
+        Serial.print("orp: ");
+        Serial.println(orpData);
+         
+         
+        unsigned long createdAtTime = getCurrentTime();
+        /*char requestBody[3000];
+        sprintf(requestBody,"{\"clientReadings\":{\"sensorA\":[ %s ],\"sensorB\":[ %s ] },\"clientDevice\":{ \"id\": %i,\"current_water_amount\": %i ,\"max_water_amount\":{ \"value\": %i, \"created_at\": %lu }}}", 
+          flowmeterData, orpData, DEVICE_ID, currentWaterAmount, maxWaterAmount, createdAtTime);
+          */
+        
+        String requestBody = 
+        "{\"clientReadings\":{\"sensorA\": {},\"sensorB\": { " + orpData + "} },\"clientDevice\":{ \"id\": "
+        + String(DEVICE_ID) +
+        ",\"current_water_amount\": " + currentWaterAmount +
+        ",\"max_water_amount\":{ \"value\": " + maxWaterAmount + ", \"created_at\": " + createdAtTime + " }}}";
+        
+        Serial.print("request body: ");
+        Serial.println(requestBody);
+        postData(requestBody);
+
+        //clean up the old data
+        SD.remove(FLOWMETER_FILENAME);
+        SD.remove(ORP_FILENAME);
+        newDataExists = false;
+      }
     }
     //check for the response to the HTTP GET Request - this sets the max water and current water variables
     checkResponse();
+
+    //decide if we should turn the water on
+    if (currentWaterAmount > 0){
+      turnWaterOn();
+    }
   }  
 
   //ORP readings every 5 minutes
@@ -108,6 +150,7 @@ void loop() {
     previousORPSampleTime = loopTime;
     //grab reading from ORP Sensor
     appendSensor(ORPReading, false);
+    newDataExists = true;
   }
 
   delay(100);
@@ -116,13 +159,13 @@ void loop() {
 
 /***Helper Functions***/
 
-char* readFile(const char *filename){
+String readFile(const char *filename){
   Serial.println(filename);
-  char* fileContents;
+  String fileContents;
   File sensorFile = SD.open(filename);
   if (sensorFile){
     while(sensorFile.available()){
-     fileContents += sensorFile.read();
+     fileContents += (char)sensorFile.read();
       //Serial.write(sensorFile.read());
     }
     sensorFile.close();
@@ -179,8 +222,6 @@ void initSDCard(){
 
   Serial.println("Successfully initialized SD Card");
 
-  SD.remove(FLOWMETER_FILENAME);
-  SD.remove(ORP_FILENAME);
   //setup flowmeter file
   if (!SD.exists(FLOWMETER_FILENAME)){
     sensorAFile = SD.open(FLOWMETER_FILENAME, FILE_WRITE);

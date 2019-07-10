@@ -1,9 +1,8 @@
-void wifiCommunication(const char *body){
+void getData(){
   if(WiFi.status()== WL_CONNECTED){   //Check WiFi connection status
 
    if (client.connect(URL, 80)){
-      Serial.println("connected to server");
-      Serial.println(body);
+    Serial.println("Getting current water");
       client.print("GET /sema/water-ops/pgwc/");
       client.print(DEVICE_ID);
       client.println(" HTTP/1.1"); 
@@ -40,23 +39,47 @@ void checkResponse(){
       maxWaterString +=c;
     }
   }
-  //Serial.print("response string: " + responseString);
-  //deserialize
-  DeserializationError error1 = deserializeJson(jsonDoc1, deviceString);
-  DeserializationError error2 = deserializeJson(jsonDoc2, maxWaterString);
-  long currentWaterChar = jsonDoc1["current_water_amount"];
-  long maxWaterChar = jsonDoc2["value"];
-  if (currentWaterChar > 0){
-    //set the water variable
-    currentWaterAmount = currentWaterChar;
-    Serial.print("currrent water char ");
-    Serial.println(currentWaterChar);
+  if (maxWaterString != "" && deviceString != ""){
+    //Serial.print("response string: " + responseString);
+    //deserialize
+    DeserializationError error1 = deserializeJson(jsonDoc1, deviceString);
+    DeserializationError error2 = deserializeJson(jsonDoc2, maxWaterString);
+    long currentWaterChar = jsonDoc1["current_water_amount"];
+    long maxWaterChar = jsonDoc2["value"];
+    if (currentWaterChar > 0){
+      //set the water variable
+      currentWaterAmount = currentWaterChar;
+      Serial.print("currrent water char ");
+      Serial.println(currentWaterChar);
+    }
+  
+    if(maxWaterChar > 0){
+      //set the max water variable
+      maxWaterAmount = maxWaterChar;
+      Serial.print("max water char ");
+      Serial.println(maxWaterChar);
+    }
+  }
+}
+
+void postData(String body){
+  if(WiFi.status()== WL_CONNECTED){   //Check WiFi connection status
+
+   if (client.connect(URL, 80)){
+      Serial.println("Body");
+      Serial.println(body);
+      client.print("POST /sema/water-ops/pgwc/");
+      client.print(DEVICE_ID);
+      client.println(" HTTP/1.1"); 
+      client.print("Host: ");
+      client.println(URL);
+      client.println("Content-type:application/json");
+      client.println("Connection: close");
+      client.println();
+      client.println(body);
+   }else{
+    Serial.println("Error connecting to server");
+   }
   }
 
-  if(maxWaterChar > 0){
-    //set the max water variable
-    maxWaterAmount = maxWaterChar;
-    Serial.print("max water char ");
-    Serial.println(maxWaterChar);
-  }
 }
