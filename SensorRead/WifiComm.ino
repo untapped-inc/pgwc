@@ -68,9 +68,7 @@ void postData(String body){
    if (client.connect(URL, 80)){
       Serial.println("Body");
       Serial.println(body);
-      client.print("POST /sema/water-ops/pgwc/");
-      client.print(DEVICE_ID);
-      client.println(" HTTP/1.1"); 
+      client.println("POST /sema/water-ops/pgwc HTTP/1.1"); 
       client.print("Host: ");
       client.println(URL);
       client.println("Content-type:application/json");

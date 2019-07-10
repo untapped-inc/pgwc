@@ -31,9 +31,8 @@ long startingMillis;
 
 long previousORPSampleTime;
 long previousWifiTime;
-//total milliseconds per ORP sample
-//todo: change back to 5 minutes
-const long ORP_SAMPlE_MILLIS = 3000;//300000;
+//total milliseconds per ORP sample 5 minutes
+const long ORP_SAMPlE_MILLIS = 300000;
 // interval at which to communicate (milliseconds)
 const int WIFI_INTERVAL = 1000;
 
@@ -103,35 +102,33 @@ void loop() {
         //sends the GET HTTP request
         getData();
       }else{
-        //send the data
+        //todo: send the data - this needs to be implemented in future versions
         //String flowmeterData = readFile(FLOWMETER_FILENAME);
-        String orpData = readFile(ORP_FILENAME);
+        //String orpData = readFile(ORP_FILENAME);
         /*Serial.print("flowmeter Data: ");
         Serial.println(flowmeterData);
         */
-        Serial.print("orp: ");
-        Serial.println(orpData);
-         
-         
+
+        //orpData.trim();
+
+        String orpData = "";
+               
         unsigned long createdAtTime = getCurrentTime();
-        /*char requestBody[3000];
-        sprintf(requestBody,"{\"clientReadings\":{\"sensorA\":[ %s ],\"sensorB\":[ %s ] },\"clientDevice\":{ \"id\": %i,\"current_water_amount\": %i ,\"max_water_amount\":{ \"value\": %i, \"created_at\": %lu }}}", 
-          flowmeterData, orpData, DEVICE_ID, currentWaterAmount, maxWaterAmount, createdAtTime);
-          */
         
         String requestBody = 
-        "{\"clientReadings\":{\"sensorA\": {},\"sensorB\": { " + orpData + "} },\"clientDevice\":{ \"id\": "
+        "{\"clientReadings\":{\"sensorA\": [],\"sensorB\": [ " + orpData + "] },\"clientDevice\":{ \"id\": "
         + String(DEVICE_ID) +
         ",\"current_water_amount\": " + currentWaterAmount +
         ",\"max_water_amount\":{ \"value\": " + maxWaterAmount + ", \"created_at\": " + createdAtTime + " }}}";
         
-        Serial.print("request body: ");
-        Serial.println(requestBody);
+       // Serial.print("request body: ");
+        //Serial.println(requestBody);
         postData(requestBody);
 
         //clean up the old data
         SD.remove(FLOWMETER_FILENAME);
-        SD.remove(ORP_FILENAME);
+        //July 10, 2019: this file isn't being overwritten because we can't send it up to the endpoint yet
+        //SD.remove(ORP_FILENAME);
         newDataExists = false;
       }
     }
@@ -176,6 +173,7 @@ String readFile(const char *filename){
 }
 
 void appendSensor(unsigned long value, bool isSensorA){
+  //todo: in future versions, allow the ORP to be appended
   File sensorFile;
   if (isSensorA){
     sensorFile =  SD.open(FLOWMETER_FILENAME, FILE_WRITE);
@@ -185,7 +183,7 @@ void appendSensor(unsigned long value, bool isSensorA){
   if (sensorFile){
     char buffer[1000];
     long unixTime = getCurrentTime();
-    sprintf(buffer, "{created_at: %lu, value: %lu },", unixTime, value); 
+    sprintf(buffer, "{\"created_at\": %lu, \"value\": %lu }", unixTime, value); 
     sensorFile.println(buffer);
   }else{
     Serial.println("Failed to open for print");
